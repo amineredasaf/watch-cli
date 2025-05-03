@@ -24,11 +24,11 @@ sudo apt update && sudo apt install -y \
 # Install pup (HTML parser)
 echo "🌐 Installing pup..."
 PUP_VERSION="v0.4.0"
-PUP_URL="https://github.com/ericchiang/pup/releases/download/$PUP_VERSION/pup_${PUP_VERSION}_linux_amd64.zip"
-
+# PUP_URL="https://github.com/ericchiang/pup/releases/download/$PUP_VERSION/pup_${PUP_VERSION}_linux_amd64.zip"
+wget https://github.com/ericchiang/pup/releases/download/v0.4.0/pup_v0.4.0_linux_amd64.zip
 mkdir -p ~/.local/bin
 cd /tmp
-curl -LO "$PUP_URL"
+# curl -LO "$PUP_URL"
 unzip -o "pup_${PUP_VERSION}_linux_amd64.zip"
 chmod +x pup
 mv pup ~/.local/bin/
