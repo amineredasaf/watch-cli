@@ -1,0 +1,74 @@
+#!/bin/bash
+
+base_helper_url="https://9anime.eltik.net"
+
+# Ask for search input if none provided
+[ -z "$*" ] && printf '=> ' && read -r user_query || user_query=$*
+query=$(printf "%s" "$user_query" | tr " " "+")
+
+# Search IMDb
+imdb_html_content=$(curl -s "https://www.imdb.com/find/?q=$query" -A "uwu")
+echo "🔍 Searching IMDb..."
+
+# Parse IDs, images, and titles
+ids=$(echo "$imdb_html_content" | pup "li.find-title-result a attr{href}" | sed -n 's/\/title\/\([a-zA-Z0-9]*\)\/.*/\1/p')
+image_urls=$(echo "$imdb_html_content" | pup "li.find-title-result img attr{src}" | awk -F '._' '{print $1}')
+titles=$(echo "$imdb_html_content" | pup "li.find-title-result a text{}" | sed "s/ /_/g")
+
+# Combine
+results=$(paste -d " " <(echo "$ids") <(echo "$image_urls") <(echo "$titles"))
+
+# FZF with image preview
+name=$(echo "$results" | fzf --with-nth=3.. --prompt "What do you want to watch? " --preview "echo {} | cut -d' ' -f2 | xargs -I {} curl -s {} | chafa -c full --dither-intensity 10")
+imdb_id=$(echo "$name" | cut -d' ' -f1)
+
+# Determine if movie or show
+check_if=$(curl -Ls "https://www.imdb.com/title/$imdb_id/episodes" -A "uwu")
+if echo "$check_if" | pup "p[data-testid] text{}" | grep -q "episode"; then
+    echo "📺 Detected TV Show"
+    season_number=$(echo "$check_if" | pup 'ul.ipc-tabs li[data-testid="tab-season-entry"] text{}' | fzf --prompt "Select season: ")
+    [ -z "$season_number" ] && echo "⚠️ No season selected. Exiting." && exit 1
+    episode_number=$(curl -Ls "https://www.imdb.com/title/$imdb_id/episodes?season=$season_number" -A "uwu" | pup "h4.sc-1318654d-7.fACRye text{}" | fzf --prompt "Select episode: " | sed -n 's/.*E\([0-9]\+\).*/\1/p')
+    [ -z "$episode_number" ] && echo "⚠️ No episode selected. Exiting." && exit 1
+
+    final_url="https://vidsrc.icu/embed/tv/$imdb_id/$season_number/$episode_number"
+    echo "🔗 TV Episode URL: $final_url"
+
+else
+    echo "🎬 Detected Movie"
+    final_url="https://vidsrc.icu/embed/movie/$imdb_id"
+    echo "🔗 Movie URL: $final_url"
+fi
+
+# Let user choose how to open
+echo ""
+echo "How do you want to open it?"
+echo "1. Open in browser"
+echo "2. Play with mpv"
+read -rp "Select option (1 or 2): " option
+
+if [[ "$option" == "1" ]]; then
+    # Smart browser opening based on environment
+    if grep -qi microsoft /proc/version; then
+        echo "🪟 Detected WSL, opening in Windows browser..."
+        powershell.exe /c start "$final_url"
+    elif command -v xdg-open >/dev/null; then
+        echo "🌐 Opening in Linux browser..."
+        xdg-open "$final_url"
+    else
+        echo "⚠️ No browser found. Please open manually:"
+        echo "$final_url"
+    fi
+elif [[ "$option" == "2" ]]; then
+    if command -v mpv >/dev/null; then
+        echo "🎞️ Playing with MPV..."
+        mpv --force-media-title="$user_query" "$final_url"
+    else
+        echo "⚠️ MPV is not installed. Please install it or open the link manually:"
+        echo "$final_url"
+    fi
+else
+    echo "⚠️ Invalid choice. Exiting."
+    exit 1
+fi
+
